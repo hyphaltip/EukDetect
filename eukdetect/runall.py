@@ -28,7 +28,7 @@ def main(argv=sys.argv):
 
 				aln: only runs alignment step of pipeline.
 
-				filter: runs all downstream analysis of alignment. 
+				filter: runs all downstream analysis of alignment.
 					Requires alignment files to already exist.
 
 				alncmd: prints alignment commands to alignment_commands.txt.
@@ -95,11 +95,11 @@ def main(argv=sys.argv):
 			exit(1)
 
 		#check the database exists
-		db_files = ["all_buscos_v4.fna.1.bt2", 
-					"all_buscos_v4.fna.2.bt2", 
-					"all_buscos_v4.fna.3.bt2", 
-					"all_buscos_v4.fna.4.bt2", 
-					"all_buscos_v4.fna.rev.1.bt2", 
+		db_files = ["all_buscos_v4.fna.1.bt2",
+					"all_buscos_v4.fna.2.bt2",
+					"all_buscos_v4.fna.3.bt2",
+					"all_buscos_v4.fna.4.bt2",
+					"all_buscos_v4.fna.rev.1.bt2",
 					"all_buscos_v4.fna.rev.2.bt2",
 					"taxa.sqlite",
 					"taxa.sqlite.traverse.pkl"
@@ -114,17 +114,17 @@ def main(argv=sys.argv):
 					seen_sql = True
 
 			if len(db_files) > 0:
-				logging.error("Error: missing files in database directory: " + 
-					", ".join(db_files))
+				logging.error("Error: missing files in database directory %s: %s"%(
+					config_info["database_dir"],", ".join(db_files)))
 				exit(1)
 		else:
-			logging.error("Error: could not locate database directory.")
+			logging.error("Error: could not locate database directory (specified as=%s)."%(config_info["database_dir"]))
 			exit(1)
 
 	#check snakemake rules file exists
 	snakefile = Path(config_info["eukdetect_dir"] + "/rules/eukdetect.rules")
 	if not snakefile.exists():
-		logging.error("Error: could not find /rules/eukdetect.rules in eukdetect_dir specified in configfile.")
+		logging.error("Error: could not find /rules/eukdetect.rules in eukdetect_dir specified in configfile as %s."%(config_info["eukdetect_dir"]))
 		exit(1)
 
 	#check required inputs and required outputs
@@ -160,9 +160,9 @@ def main(argv=sys.argv):
 
 		#check fastas exist
 
-		snakemake_args = ['snakemake', 
-						  '--snakefile', 
-						  str(snakefile), 
+		snakemake_args = ['snakemake',
+						  '--snakefile',
+						  str(snakefile),
 						  '--configfile',
 						  options.config,
 						  '--cores',
@@ -191,9 +191,9 @@ def main(argv=sys.argv):
 				logging.error("\n".join(alncontain))
 				exit(1)
 
-		snakemake_args = ['snakemake', 
-						  '--snakefile', 
-						  str(snakefile), 
+		snakemake_args = ['snakemake',
+						  '--snakefile',
+						  str(snakefile),
 						  '--configfile',
 						  options.config,
 						  '--cores',
@@ -226,9 +226,9 @@ def main(argv=sys.argv):
 
 
 
-		snakemake_args = ['snakemake', 
-						  '--snakefile', 
-						  str(snakefile), 
+		snakemake_args = ['snakemake',
+						  '--snakefile',
+						  str(snakefile),
 						  '--configfile',
 						  options.config,
 						  '--cores',
@@ -263,9 +263,9 @@ def main(argv=sys.argv):
 				exit(1)
 
 
-		snakemake_args = ['snakemake', 
-						  '--snakefile', 
-						  str(snakefile), 
+		snakemake_args = ['snakemake',
+						  '--snakefile',
+						  str(snakefile),
 						  '--configfile',
 						  options.config,
 						  '--cores',
@@ -292,7 +292,7 @@ def main(argv=sys.argv):
 		#check correct output exists
 
 		if options.mode == "alncmd":
-			#if alncmd replace the brackets with single quotes that snakemake improperly evalutes. would like to find alt solution	
+			#if alncmd replace the brackets with single quotes that snakemake improperly evalutes. would like to find alt solution
 			if os.path.isfile(config_info["output_dir"] + "/alignment_commands.txt"):
 				newcmds = []
 				for line in open(config_info["output_dir"] + "/alignment_commands.txt"):
@@ -465,7 +465,7 @@ def check_readlen(config_info):
 			counter = 0
 			bases = 0
 			if ".gz" in rev:
-				
+
 				with gzip.open(rev, "rt") as handle:
 					for record in SeqIO.parse(handle, "fastq"):
 						if counter > 10000:
@@ -507,4 +507,3 @@ def check_readlen(config_info):
 				if abs(file_readlen - readlen) > 10:
 					bad.append(read)
 	return bad
-
