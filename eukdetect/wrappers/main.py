@@ -5,6 +5,7 @@ import logging
 import sys
 import textwrap
 
+from .. import __version__
 from . import runall
 
 logging.basicConfig(
@@ -34,7 +35,7 @@ def create_parser():
 		formatter_class = argparse.RawDescriptionHelpFormatter
 	)
 
-	parser.add_argument("--version", action='version', version='EukDetect v2.0.1')
+	parser.add_argument("--version", action='version', version=f'EukDetect v{__version__}')
 	parser.add_argument("--verbose", "-v", action="store_true", help="verbose")
 
 	#subparsers for commands

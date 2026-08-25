@@ -8,8 +8,12 @@ LABEL version="${EUKDETECT_VERSION}"
 
 WORKDIR /opt/eukdetect
 
+# Runtime aligners -- see note in Dockerfile. "lite" here means "no bundled
+# database", NOT "no tools": without bowtie2/samtools the image cannot run at all.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    bowtie2 \
+    samtools \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager for faster installations
@@ -18,10 +22,22 @@ RUN pip install --no-cache-dir uv
 COPY . .
 
 RUN uv pip install --system -e . && \
-    eukdetect --version
+    eukdetect --version && \
+    bowtie2 --version | head -1 && \
+    samtools --version | head -1
 
 # Create database directory for mounting
 RUN mkdir -p /opt/eukdb
+
+
+# Container hygiene for HPC / Singularity / Apptainer use:
+#  - snakemake writes a source cache to $XDG_CACHE_HOME, else $HOME/.cache. Under
+#    apptainer $HOME is often absent or read-only, which fails the run with
+#    FileNotFoundError on <home>/.cache/snakemake. Default it somewhere writable.
+#  - bowtie2's perl wrapper emits locale warnings on every invocation without these.
+ENV XDG_CACHE_HOME=/tmp/.cache \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 ENTRYPOINT ["eukdetect"]
 CMD ["--help"]
