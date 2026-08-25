@@ -14,6 +14,3 @@ build
 *.swp
 *.swo
 *~
-README.md
-LICENSE
-MANIFEST.in
