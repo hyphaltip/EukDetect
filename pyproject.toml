@@ -12,6 +12,15 @@ description = "Detect eukaryotes from shotgun metagenomic data"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
+dependencies = [
+    "pyyaml",
+    "pysam",
+    "biopython",
+    "ete3",
+    "snakemake-minimal>=8",
+    "pandas",
+    "numpy",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

@@ -23,6 +23,15 @@ setuptools.setup(
 		},
 		include_package_data=True,
 		python_requires=">=3.8",
+		install_requires=[
+			"pyyaml",
+			"pysam",
+			"biopython",
+			"ete3",
+			"snakemake-minimal>=8",
+			"pandas",
+			"numpy",
+		],
 		classifiers=[
 			"Development Status :: 4 - Beta",
 			"Intended Audience :: Science/Research",
