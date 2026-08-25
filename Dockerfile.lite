@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+ARG EUKDETECT_VERSION=v2.0.2
+
+LABEL maintainer="Jason Stajich <jasonstajich.phd@gmail.com>"
+LABEL description="EukDetect: Lightweight container without embedded database"
+LABEL version="${EUKDETECT_VERSION}"
+
+WORKDIR /opt/eukdetect
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager for faster installations
+RUN pip install --no-cache-dir uv
+
+COPY . .
+
+RUN uv pip install --system -e . && \
+    eukdetect --version
+
+# Create database directory for mounting
+RUN mkdir -p /opt/eukdb
+
+ENTRYPOINT ["eukdetect"]
+CMD ["--help"]

@@ -1,0 +1,204 @@
+# Builds and publishes the EukDetect container images.
+#
+# - Every push to master:      rebuilds the Docker image and publishes it as
+#                              ghcr.io/hyphaltip/eukdetect:latest / :master
+# - Every published release:   builds the Docker image pinned to that tag and
+#                              publishes ghcr.io/hyphaltip/eukdetect:<tag> / :<version>
+#
+# All images are signed with Cosign (Sigstore) and include SLSA provenance
+# attestations for supply-chain security.
+
+name: Build container images
+
+on:
+  push:
+    branches: [master, main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: hyphaltip/eukdetect
+
+jobs:
+  docker-main:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read version from VERSION file
+        id: version
+        run: |
+          version=$(cat .github/workflows/VERSION)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: .
+          push: true
+          build-args: |
+            EUKDETECT_VERSION=${{ steps.version.outputs.version }}
+            DOWNLOAD_DATABASE=0
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-release:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: .
+          push: true
+          build-args: |
+            EUKDETECT_VERSION=${{ steps.meta.outputs.version }}
+            DOWNLOAD_DATABASE=0
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-sign:
+    needs: [docker-main, docker-release]
+    runs-on: ubuntu-latest
+    if: always() && (contains(needs.docker-main.result, 'success') || contains(needs.docker-release.result, 'success'))
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: sigstore/cosign-installer@v4.1.2
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign main/latest images
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          cosign sign --yes \
+            --recursive \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.docker-main.outputs.digest }}"
+
+      - name: Sign release images
+        if: github.event_name == 'release'
+        run: |
+          cosign sign --yes \
+            --recursive \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.docker-release.outputs.digest }}"
+
+  provenance:
+    needs: [docker-main, docker-release, docker-sign]
+    runs-on: ubuntu-latest
+    if: always() && (contains(needs.docker-main.result, 'success') || contains(needs.docker-release.result, 'success'))
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: sigstore/cosign-installer@v4.1.2
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SLSA provenance predicate
+        id: slsa-predicate
+        run: |
+          started_on="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          predicate_file="${RUNNER_TEMP}/slsa-provenance.json"
+          cat > "${predicate_file}" <<JSON
+          {
+            "buildDefinition": {
+              "buildType": "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/docker-build.yml",
+              "externalParameters": {},
+              "internalParameters": {},
+              "resolvedDependencies": []
+            },
+            "runDetails": {
+              "builder": {
+                "id": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+              },
+              "metadata": {
+                "invocationId": "${GITHUB_RUN_ID}",
+                "startedOn": "${started_on}"
+              },
+              "byproducts": []
+            }
+          }
+          JSON
+          echo "path=${predicate_file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate SLSA provenance for main/latest
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          cosign attest --yes \
+            --predicate "${{ steps.slsa-predicate.outputs.path }}" \
+            --type=slsaprovenance1 \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.docker-main.outputs.digest }}"
+
+      - name: Generate SLSA provenance for release images
+        if: github.event_name == 'release'
+        run: |
+          cosign attest --yes \
+            --predicate "${{ steps.slsa-predicate.outputs.path }}" \
+            --type=slsaprovenance1 \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.docker-release.outputs.digest }}"
