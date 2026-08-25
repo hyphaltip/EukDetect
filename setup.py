@@ -28,7 +28,7 @@ setuptools.setup(
 			"pysam",
 			"biopython",
 			"ete3",
-			"snakemake-minimal>=8",
+			"snakemake>=8",
 			"pandas",
 			"numpy",
 		],
