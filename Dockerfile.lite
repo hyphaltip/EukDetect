@@ -10,11 +10,22 @@ WORKDIR /opt/eukdetect
 
 # Runtime aligners -- see note in Dockerfile. "lite" here means "no bundled
 # database", NOT "no tools": without bowtie2/samtools the image cannot run at all.
+# samtools comes from apt; bowtie2 is built from source below -- see that step.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    bowtie2 \
+    build-essential \
     samtools \
     && rm -rf /var/lib/apt/lists/*
+
+# Build bowtie2 from source instead of the apt package, which ships only a
+# baseline (SSE2) binary with no -v256 (AVX2/x86-64-v3) variant. See the note
+# in Dockerfile for the full explanation.
+ARG BOWTIE2_VERSION=2.5.5
+RUN git clone --depth 1 --branch "v${BOWTIE2_VERSION}" \
+      https://github.com/BenLangmead/bowtie2.git /tmp/bowtie2-src && \
+    make -C /tmp/bowtie2-src -j"$(nproc)" && \
+    make -C /tmp/bowtie2-src install PREFIX=/usr/local && \
+    rm -rf /tmp/bowtie2-src
 
 # Install uv package manager for faster installations
 RUN pip install --no-cache-dir uv

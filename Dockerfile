@@ -12,14 +12,28 @@ WORKDIR /opt/eukdetect
 # Runtime aligners. EukDetect's snakemake `runaln` rule shells out to bowtie2 and
 # samtools, so they must be IN the image -- a container has its own filesystem and
 # cannot see host modules. Debian 13 (trixie, the python:3.11-slim base) ships
-# bowtie2 2.5.4 and samtools 1.21, both current; note Ubuntu 24.04 would give an
-# OLDER samtools (1.19.x), so there is no reason to change base.
+# samtools 1.21, which is current, so it is kept from apt. bowtie2 is built from
+# source below instead of using the apt package -- see that step for why.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
-    bowtie2 \
+    build-essential \
     samtools \
     && rm -rf /var/lib/apt/lists/*
+
+# Build bowtie2 from source instead of using the apt/conda package. Distro
+# packages ship only a single baseline (SSE2) binary with no -v256 (AVX2 /
+# x86-64-v3) variant, so they silently miss the AVX2 speedup on any CPU that
+# supports it. Building from source with the container's own toolchain (GCC
+# 12+, needed for -march=x86-64-v3 dispatch) produces the -v256 binaries and
+# the runtime-dispatch launcher that picks them automatically. Mirrors the
+# approach used in the AAFTF and funannotate Dockerfiles.
+ARG BOWTIE2_VERSION=2.5.5
+RUN git clone --depth 1 --branch "v${BOWTIE2_VERSION}" \
+      https://github.com/BenLangmead/bowtie2.git /tmp/bowtie2-src && \
+    make -C /tmp/bowtie2-src -j"$(nproc)" && \
+    make -C /tmp/bowtie2-src install PREFIX=/usr/local && \
+    rm -rf /tmp/bowtie2-src
 
 # Install uv package manager for efficient dependency management
 ENV PATH="/root/.local/bin:$PATH"
